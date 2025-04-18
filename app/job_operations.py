@@ -1,5 +1,5 @@
 from pymilvus import Collection
-from connect import connect_to_milvus
+from milvus.connect import connect_to_milvus
 
 def fetch_job_vector(job_id: int):
     """

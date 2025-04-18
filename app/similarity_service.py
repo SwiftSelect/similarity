@@ -1,7 +1,8 @@
 from fastapi import FastAPI
 from milvus.search_candidates import search_candidates
 from milvus.connect import connect_to_milvus
-from job_operations import fetch_job_vector, get_applicants_for_job
+from app.job_operations import fetch_job_vector, get_applicants_for_job
+
 app = FastAPI()
 
 @app.get("/match/job/{job_id}/top-candidates")
