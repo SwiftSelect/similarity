@@ -15,59 +15,7 @@ A microservice for job-candidate matching using vector similarity search powered
 - Zilliz Cloud account and credentials
 - pip (Python package manager)
 
-## Setup
 
-1. Clone the repository:
-```bash
-git clone <repository-url>
-cd similarity
-```
-
-2. Create and activate a virtual environment (recommended):
-```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-```
-
-3. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
-
-4. Set up environment variables:
-Create a `.env` file in the root directory with your Zilliz Cloud credentials:
-```
-ZILLIZ_URI=your_cluster_uri
-ZILLIZ_TOKEN=your_cluster_token
-```
-
-5. Initialize the database:
-```bash
-python milvus/create_candidate_db.py
-python milvus/create_job_db.py
-```
-
-## Project Structure
-
-```
-.
-├── app/
-│   ├── similarity_service.py    # Main FastAPI service
-│   └── job_operations.py       # Job-related operations
-├── milvus/
-│   ├── connect.py              # Database connection handling
-│   ├── create_candidate_db.py  # Candidate collection setup
-│   ├── create_job_db.py       # Job collection setup
-│   ├── insert_candidate.py    # Candidate insertion
-│   ├── insert_job.py         # Job insertion
-│   └── search_candidates.py   # Candidate search operations
-├── test/
-│   ├── test_connection.py     # Connection tests
-│   └── test_job_operations.py # Job operations tests
-├── .env                       # Environment variables
-├── requirements.txt           # Python dependencies
-└── README.md                 # This file
-```
 
 ## Usage
 
