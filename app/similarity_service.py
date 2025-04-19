@@ -20,8 +20,6 @@ def match_candidates(job_id: int, top_k: int = 5):
             formatted.append({
                 "candidate_id": hit.entity.get("candidate_id"),
                 "name": hit.entity.get("name"),
-                "skills": hit.entity.get("skills"),
-                "experience_years": hit.entity.get("experience_years"),
                 "score": hit.distance
             })
 
