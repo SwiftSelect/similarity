@@ -65,17 +65,22 @@ REDIS_PORT=6379
 
 ## Usage
 
-1. Start the consumer to process Kafka messages:
+1. Start the Embeddings API service first:
+```bash
+python -m embeddings.embeddings-api
+```
+
+2. Start the consumer to process Kafka messages:
 ```bash
 python -m app.generic_consumers
 ```
 
-2. Start the API service:
+3. Start the Matching API service:
 ```bash
 python -m app.api
 ```
 
-3. Access the API documentation:
+4. Access the API documentation:
 - OpenAPI documentation: http://localhost:8000/docs
 - ReDoc documentation: http://localhost:8000/redoc
 
