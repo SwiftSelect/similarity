@@ -5,8 +5,8 @@ def create_candidate_collection():
     connect_to_milvus()
     
     fields = [
-        FieldSchema(name="candidate_id", dtype=DataType.INT64, is_primary=True, auto_id=False),
-        FieldSchema(name="candidate_vector", dtype=DataType.FLOAT_VECTOR, dim=768),
+        FieldSchema(name="candidate_id", dtype=DataType.VARCHAR, max_length=100, is_primary=True, auto_id=False),
+        FieldSchema(name="candidate_vector", dtype=DataType.FLOAT_VECTOR, dim=1024),
         FieldSchema(name="name", dtype=DataType.VARCHAR, max_length=100),
     ]
     
