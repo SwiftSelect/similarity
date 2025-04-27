@@ -1,6 +1,6 @@
 # SwiftSelect Similarity Service
 
-A microservice for job-candidate matching using vector similarity search powered by Milvus/Zilliz Cloud and Redis.
+A microservice for job-candidate matching and job recommendations using vector similarity search powered by Milvus/Zilliz Cloud and Redis.
 
 ## Features
 
@@ -16,12 +16,15 @@ A microservice for job-candidate matching using vector similarity search powered
 The system consists of the following components:
 
 1. **Embeddings API**: Generates vector embeddings from text using pretrained or finetuned models
-2. **Generic Consumer**: Processes messages from Kafka, generates embeddings, and stores them
-3. **Redis**: Stores similarity scores and provides fast access to ranked candidates
-4. **Milvus/Zilliz**: Stores vector embeddings for jobs and candidates
-5. **Matching API**: Exposes endpoints for retrieving top candidate matches
+2. **Candidate Matching**: Processes job applications and matches candidates to specific jobs
+3. **Job Recommendations**: Generates personalized job recommendations for candidates
+4. **Redis**: Stores similarity scores and provides fast access to ranked candidates and job recommendations
+5. **Milvus/Zilliz**: Stores vector embeddings for jobs and candidates
+6. **APIs**: Expose endpoints for retrieving candidate matches and job recommendations
 
 ## Workflow
+
+### Candidate Matching
 
 1. **Job Posting**: When a job is posted, the system:
    - Extracts relevant text from the job description
@@ -38,6 +41,19 @@ The system consists of the following components:
 3. **Matching**: To find the best candidates for a job:
    - Query Redis sorted sets for pre-calculated similarity scores
    - Return candidates ordered by highest similarity
+
+### Job Recommendations
+
+1. **Candidate Profile Processing**: When a candidate profile is updated:
+   - Extracts relevant text from candidate data
+   - Generates vector embeddings
+   - Stores them in Milvus/Zilliz
+   - Finds similar jobs using vector similarity search
+   - Stores top matching jobs in Redis
+
+2. **Job Recommendations**: To provide personalized job recommendations:
+   - Query Redis sorted sets for pre-calculated job matches
+   - Return jobs ordered by highest similarity
 
 ## Prerequisites
 
@@ -70,27 +86,60 @@ REDIS_PORT=6379
 python -m embeddings.embeddings-api
 ```
 
-2. Start the consumer to process Kafka messages:
+2. Start the consumers to process Kafka messages:
 ```bash
-python -m app.generic_consumers
+# For candidate-job matching (applications)
+python -m candidate_matching.generic_consumers
+
+# For job recommendations
+python -m jobs_recommendation.consumer
 ```
 
-3. Start the Matching API service:
+3. Start the API services:
 ```bash
-python -m app.api
+# Candidate matching API
+python -m candidate_matching.api
+
+# Job recommendations API
+python -m jobs_recommendation.api
 ```
 
 4. Access the API documentation:
-- OpenAPI documentation: http://localhost:8000/docs
-- ReDoc documentation: http://localhost:8000/redoc
+- Candidate Matching API: http://localhost:8000/docs
+- Job Recommendations API: http://localhost:8002/docs
 
 ## API Endpoints
+
+### Candidate Matching API
 
 - `GET /matches/job/{job_id}`
   - Get top matching candidates for a specific job
   - Query parameters:
     - `limit`: Number of candidates to return (default: 10)
     - `include_details`: Whether to include additional candidate details (default: false)
+
+### Job Recommendations API
+
+- `GET /recommendations/{candidate_id}`
+  - Get recommended jobs for a specific candidate
+  - Query parameters:
+    - `limit`: Number of jobs to return (default: 10)
+    - `include_details`: Whether to include additional job details (default: false)
+
+## Project Structure
+
+```
+.
+├── candidate_matching/       # Candidate-job application matching
+│   ├── api.py               # API for candidate matching
+│   └── generic_consumers.py # Kafka consumers for job applications
+├── jobs_recommendation/      # Personalized job recommendations
+│   ├── api.py               # API for job recommendations
+│   └── consumer.py          # Kafka consumer for candidate profiles
+├── embeddings/              # Embedding generation services
+├── milvus/                  # Milvus/Zilliz connection and collection setup
+└── test/                    # Test suite
+```
 
 ## Testing
 

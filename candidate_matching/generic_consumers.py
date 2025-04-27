@@ -166,20 +166,27 @@ async def extract_job_text(job_data):
     """Extract relevant text from job data for embedding"""
     text_parts = []
     
+    # Add job title
+    if job_data.get('Title'):
+        text_parts.append(job_data['Title'])
+
     # Add job description
-    if job_data.get('description'):
-        text_parts.append(job_data['description'])
+    if job_data.get('Description'):
+        text_parts.append(job_data['Description'])
     
     # Add job requirements
-    if job_data.get('requirements'):
-        text_parts.append(job_data['requirements'])
+    if job_data.get('Overview'):
+        text_parts.append(job_data['Overview'])
     
     # Add skills required
-    if job_data.get('skills'):
-        if isinstance(job_data['skills'], list):
-            text_parts.append(' '.join(job_data['skills']))
-        elif isinstance(job_data['skills'], str):
-            text_parts.append(job_data['skills'])
+    if job_data.get('Skills'):
+        if isinstance(job_data['Skills'], list):
+            text_parts.append(' '.join(job_data['Skills']))
+        elif isinstance(job_data['Skills'], str):
+            text_parts.append(job_data['Skills'])
+    
+    if job_data.get('Experience'):
+        text_parts.append(job_data['Experience'])
     
     return ' '.join(text_parts).strip()
 
@@ -201,14 +208,13 @@ async def generate_embedding(text, identifier):
 
 async def process_candidate_message(data):
     """Process a candidate message and calculate similarity with the job they're applying to"""
-    filename = data.get('filename')
     candidate_id = data.get('candidateID', 'unknown')
     structured_data = data.get('structured_data', {})
     job_id = data.get('job_id')  # Job ID is always expected
     application_id = data.get('application_id', f"app_{candidate_id}_{job_id}")  # Generate an application ID if not provided
     
     if not job_id:
-        logger.error(f"Missing job_id for candidate {filename}, cannot process application")
+        logger.error(f"Missing job_id for candidate {candidate_id}, cannot process application")
         return
     
     # Extract text for embedding
@@ -216,19 +222,18 @@ async def process_candidate_message(data):
     
     # Fallback to JSON if no text found
     if not text_to_embed:
-        logger.warning(f"No relevant text found for candidate {filename}, using JSON fallback")
+        logger.warning(f"No relevant text found for candidate {candidate_id}, using JSON fallback")
         text_to_embed = json.dumps(structured_data)
     
     if not text_to_embed.strip():
-        logger.error(f"Empty text for candidate {filename}, skipping")
+        logger.error(f"Empty text for candidate {candidate_id}, skipping")
         return
     
     # Generate embedding
-    embedding = await generate_embedding(text_to_embed, f"candidate:{filename}")
+    embedding = await generate_embedding(text_to_embed, f"candidate:{candidate_id}")
     
     # Prepare data for Milvus
     data_to_insert = {
-        'name': filename,
         'candidate_id': candidate_id,
         'candidate_vector': embedding
     }
@@ -276,7 +281,6 @@ async def process_candidate_message(data):
 async def process_job_message(data):
     """Process a job message"""
     job_id = data.get('job_id', 'unknown')
-    job_title = data.get('job_title', 'Untitled Job')
     job_data = data.get('job_data', {})
     
     # Extract text for embedding
@@ -297,7 +301,6 @@ async def process_job_message(data):
     # Prepare data for Milvus
     data_to_insert = {
         'job_id': job_id,
-        'job_title': job_title,
         'job_vector': embedding
     }
     

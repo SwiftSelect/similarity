@@ -7,7 +7,6 @@ def create_candidate_collection():
     fields = [
         FieldSchema(name="candidate_id", dtype=DataType.VARCHAR, max_length=100, is_primary=True, auto_id=False),
         FieldSchema(name="candidate_vector", dtype=DataType.FLOAT_VECTOR, dim=1024),
-        FieldSchema(name="name", dtype=DataType.VARCHAR, max_length=100),
     ]
     
     schema = CollectionSchema(fields=fields, description="Candidate resume embeddings")
