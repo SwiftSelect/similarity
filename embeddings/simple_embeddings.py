@@ -11,7 +11,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 from transformers import AutoTokenizer, AutoModel
+import google.generativeai as genai
 
+# Configure Gemini API key
+genai.configure(api_key="AIzaSyCeVioNrfeI8536vq0avWVwpbStVmHNFuU")
 
 # Model class needed for fine-tuned model loading
 class SentenceTransformerFineTuner(nn.Module):
@@ -68,6 +71,21 @@ def get_finetuned_embedding(text, model_name="BAAI/bge-large-en-v1.5", model_pat
         embeddings = model(inputs["input_ids"], inputs["attention_mask"])
     
     return embeddings.squeeze().cpu().numpy()
+
+
+def get_gemini_embedding(text, output_dim=1024):
+    """Get embedding using the Gemini embedding model."""
+    try:
+        embedding_response = genai.embed_content(
+            model="models/gemini-embedding-exp-03-07",
+            content=text,
+            output_dimensionality=output_dim
+        )
+        return np.array(embedding_response["embedding"])
+    except Exception as e:
+        print(f"Error generating Gemini embedding: {str(e)}")
+        # Return a default embedding filled with zeros as fallback
+        return np.zeros(output_dim)
 
 
 def calculate_similarity(embedding1, embedding2):

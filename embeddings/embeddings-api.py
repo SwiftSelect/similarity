@@ -5,7 +5,7 @@ import torch
 import torch.nn.functional as F
 from transformers import AutoTokenizer, AutoModel
 import numpy as np
-from simple_embeddings import get_pretrained_embedding, get_finetuned_embedding
+from simple_embeddings import get_pretrained_embedding, get_finetuned_embedding, get_gemini_embedding
 
 app = FastAPI(
     title="Embedding API",
@@ -15,7 +15,7 @@ app = FastAPI(
 
 class TextRequest(BaseModel):
     text: str
-    model_type: str = "pretrained"  # or "finetuned"
+    model_type: str = "pretrained"  # or "finetuned" or "gemini"
 
 class EmbeddingResponse(BaseModel):
     embedding: List[float]
@@ -28,8 +28,10 @@ async def get_embedding(request: TextRequest):
             embedding = get_pretrained_embedding(request.text)
         elif request.model_type == "finetuned":
             embedding = get_finetuned_embedding(request.text)
+        elif request.model_type == "gemini":
+            embedding = get_gemini_embedding(request.text, output_dim=1024)  # Hardcoded to 1024
         else:
-            raise HTTPException(status_code=400, detail="Invalid model_type. Use 'pretrained' or 'finetuned'")
+            raise HTTPException(status_code=400, detail="Invalid model_type. Use 'pretrained', 'finetuned', or 'gemini'")
         
         return EmbeddingResponse(
             embedding=embedding.tolist(),
