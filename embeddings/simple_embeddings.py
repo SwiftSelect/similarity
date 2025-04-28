@@ -12,6 +12,7 @@ import torch.nn.functional as F
 import numpy as np
 from transformers import AutoTokenizer, AutoModel
 import google.generativeai as genai
+from peft import PeftModel
 
 # Configure Gemini API key
 genai.configure(api_key="AIzaSyCeVioNrfeI8536vq0avWVwpbStVmHNFuU")
@@ -72,6 +73,32 @@ def get_finetuned_embedding(text, model_name="BAAI/bge-large-en-v1.5", model_pat
     
     return embeddings.squeeze().cpu().numpy()
 
+def get_lora_embedding(text, model_name="BAAI/bge-large-en-v1.5", lora_path="lora_finetuned_model/lora_best_model"):
+    """Get embedding from LoRA fine-tuned model in just a few lines."""
+    # Load tokenizer and base model
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    base_model = AutoModel.from_pretrained(model_name)
+    
+    # Load LoRA adapter
+    lora_model = PeftModel.from_pretrained(base_model, lora_path)
+    lora_model.eval()
+    
+    # Tokenize and generate embedding
+    inputs = tokenizer(text, return_tensors="pt", padding=True, truncation=True, max_length=512)
+    with torch.no_grad():
+        outputs = lora_model(**inputs)
+    
+    # Mean pooling
+    attention_mask = inputs["attention_mask"]
+    token_embeddings = outputs.last_hidden_state
+    input_mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
+    embeddings = torch.sum(token_embeddings * input_mask_expanded, 1) / torch.clamp(input_mask_expanded.sum(1), min=1e-9)
+    
+    # Normalize
+    embeddings = F.normalize(embeddings, p=2, dim=1)
+    
+    return embeddings.squeeze().cpu().numpy()
+
 
 def get_gemini_embedding(text, output_dim=1024):
     """Get embedding using the Gemini embedding model."""
@@ -115,4 +142,24 @@ if __name__ == "__main__":
         job_emb_ft = get_finetuned_embedding(job, model_path=model_path)
         
         similarity_ft = calculate_similarity(resume_emb_ft, job_emb_ft)
-        print(f"Fine-tuned similarity: {similarity_ft:.4f}") 
+        print(f"Fine-tuned similarity: {similarity_ft:.4f}")
+    
+        # Try LoRA fine-tuned if model exists
+    lora_paths = [
+        "lora_best_model",
+        "lora_finetuned_model/lora_best_model",
+        "../lora_finetuned_model/lora_best_model"
+    ]
+    
+    for lora_path in lora_paths:
+        if os.path.exists(lora_path):
+            print(f"\nGenerating LoRA fine-tuned embeddings from {lora_path}...")
+            try:
+                resume_emb_lora = get_lora_embedding(resume, lora_path=lora_path)
+                job_emb_lora = get_lora_embedding(job, lora_path=lora_path)
+                
+                similarity_lora = calculate_similarity(resume_emb_lora, job_emb_lora)
+                print(f"LoRA fine-tuned similarity: {similarity_lora:.4f}")
+                break
+            except Exception as e:
+                print(f"Error loading LoRA model: {e}") 
