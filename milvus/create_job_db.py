@@ -6,7 +6,7 @@ def create_job_collection():
 
     fields = [
         FieldSchema(name="job_id", dtype=DataType.INT64, is_primary=True, auto_id=False),
-        FieldSchema(name="job_vector", dtype=DataType.FLOAT_VECTOR, dim=768),
+        FieldSchema(name="job_vector", dtype=DataType.FLOAT_VECTOR, dim=1024),
     ]
     
     schema = CollectionSchema(fields=fields, description="Job description embeddings")
