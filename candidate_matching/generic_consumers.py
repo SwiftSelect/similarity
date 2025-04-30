@@ -254,7 +254,7 @@ async def process_candidate_message(data):
 
 async def process_job_message(data):
     """Process a job message"""
-    job_id = data.get('job_id') or data.get('id')
+    job_id = data.get('job_id')
     if not job_id:
             logger.error(f"Missing job ID in data: {data}")
             return False
