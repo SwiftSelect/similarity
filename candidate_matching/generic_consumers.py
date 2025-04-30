@@ -39,7 +39,7 @@ consumer_conf = {
     'auto.offset.reset': 'earliest'
 }
 consumer = Consumer(consumer_conf)
-consumer.subscribe(['processed_resume_topic', 'processed_job_topic'])
+consumer.subscribe(['processed_resume_topic', 'jobs_topic'])
 
 # Kafka producer configuration (if needed)
 producer_conf = {
@@ -114,32 +114,6 @@ def store_similarity_score(job_id, candidate_id, application_id, similarity_scor
         logger.error(f"Error storing similarity score in Redis: {str(e)}")
         return False
 
-def get_top_candidates_for_job(job_id, limit=10):
-    """Get top candidates for a job by similarity score"""
-    try:
-        job_candidates_key = f"job:{job_id}:candidates"
-        # Get top candidates sorted by score (highest first)
-        top_candidates = redis_client.zrevrange(
-            job_candidates_key, 0, limit-1, withscores=True
-        )
-        return top_candidates
-    except Exception as e:
-        logger.error(f"Error getting top candidates from Redis: {str(e)}")
-        return []
-
-def get_top_jobs_for_candidate(candidate_id, limit=10):
-    """Get top jobs for a candidate by similarity score"""
-    try:
-        candidate_jobs_key = f"candidate:{candidate_id}:jobs"
-        # Get top jobs sorted by score (highest first)
-        top_jobs = redis_client.zrevrange(
-            candidate_jobs_key, 0, limit-1, withscores=True
-        )
-        return top_jobs
-    except Exception as e:
-        logger.error(f"Error getting top jobs from Redis: {str(e)}")
-        return []
-
 async def extract_candidate_text(structured_data):
     """Extract relevant text from candidate data for embedding"""
     text_parts = []
@@ -167,26 +141,26 @@ async def extract_job_text(job_data):
     text_parts = []
     
     # Add job title
-    if job_data.get('Title'):
-        text_parts.append(job_data['Title'])
+    if job_data.get('title'):
+        text_parts.append(job_data['title'])
 
     # Add job description
-    if job_data.get('Description'):
-        text_parts.append(job_data['Description'])
+    if job_data.get('description'):
+        text_parts.append(job_data['description'])
     
     # Add job requirements
-    if job_data.get('Overview'):
-        text_parts.append(job_data['Overview'])
+    if job_data.get('overview'):
+        text_parts.append(job_data['overview'])
     
     # Add skills required
-    if job_data.get('Skills'):
-        if isinstance(job_data['Skills'], list):
-            text_parts.append(' '.join(job_data['Skills']))
-        elif isinstance(job_data['Skills'], str):
-            text_parts.append(job_data['Skills'])
+    if job_data.get('skills'):
+        if isinstance(job_data['skills'], list):
+            text_parts.append(' '.join(job_data['skills']))
+        elif isinstance(job_data['skills'], str):
+            text_parts.append(job_data['skills'])
     
-    if job_data.get('Experience'):
-        text_parts.append(job_data['Experience'])
+    if job_data.get('experience'):
+        text_parts.append(job_data['experience'])
     
     return ' '.join(text_parts).strip()
 
@@ -280,16 +254,21 @@ async def process_candidate_message(data):
 
 async def process_job_message(data):
     """Process a job message"""
-    job_id = data.get('job_id', 'unknown')
-    job_data = data.get('job_data', {})
+    job_id = data.get('job_id') or data.get('id')
+    if not job_id:
+            logger.error(f"Missing job ID in data: {data}")
+            return False
+
+    logger.info(f"Processing job: {job_id}")
+
     
     # Extract text for embedding
-    text_to_embed = await extract_job_text(job_data)
+    text_to_embed = await extract_job_text(data)
     
     # Fallback to JSON if no text found
     if not text_to_embed:
         logger.warning(f"No relevant text found for job {job_id}, using JSON fallback")
-        text_to_embed = json.dumps(job_data)
+        text_to_embed = json.dumps(data)
     
     if not text_to_embed.strip():
         logger.error(f"Empty text for job {job_id}, skipping")
@@ -326,7 +305,7 @@ async def process_message(message):
             # This is a candidate application message
             # (assumes all candidate messages include a job_id)
             await process_candidate_message(data)
-        elif topic == 'processed_job_topic' or ('job_id' in data and 'candidateID' not in data):
+        elif topic == 'jobs_topic' or ('job_id' in data and 'candidateID' not in data):
             # This is a job posting message
             await process_job_message(data)
         else:
