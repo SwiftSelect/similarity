@@ -86,18 +86,24 @@ def calculate_similarity(vector1, vector2):
     similarity = dot_product / (norm_a * norm_b)
     return float(similarity)
 
-def store_similarity_score(job_id, candidate_id, application_id, similarity_score):
+def store_similarity_score(job_id, candidate_id, application_id, similarity_score, candidate_name=None):
     """Store similarity score in Redis"""
     try:
         # Store detailed information as a hash
         match_key = f"match:{job_id}:{candidate_id}"
-        redis_client.hset(match_key, mapping={
+        redis_data = {
             'job_id': job_id,
             'candidate_id': candidate_id,
             'application_id': application_id,
             'similarity_score': similarity_score,
             'timestamp': datetime.datetime.now().isoformat()
-        })
+        }
+        
+        # Add candidate name if provided
+        if candidate_name:
+            redis_data['candidate_name'] = candidate_name
+            
+        redis_client.hset(match_key, mapping=redis_data)
         
         # Add to a sorted set for this job (for ranking)
         # This allows retrieving candidates for a job sorted by score
@@ -129,7 +135,7 @@ async def extract_candidate_text(structured_data):
 
     # Add technical skills
     technical_skills = structured_data.get('technical_skills', {})
-    for skill_category in ['programming_databases', 'frameworks', 'ml_genai', 'devops_tools']:
+    for skill_category in ['languages', 'tools']:
         skills = technical_skills.get(skill_category, [])
         if skills:
             text_parts.append(' '.join(skills))
@@ -182,10 +188,13 @@ async def generate_embedding(text, identifier):
 
 async def process_candidate_message(data):
     """Process a candidate message and calculate similarity with the job they're applying to"""
-    candidate_id = data.get('candidateID', 'unknown')
-    structured_data = data.get('structured_data', {})
+    candidate_id = data.get('candidateID')
+    structured_data = data.get('structured_data')
     job_id = data.get('job_id')  # Job ID is always expected
     application_id = data.get('application_id', f"app_{candidate_id}_{job_id}")  # Generate an application ID if not provided
+    
+    # Extract candidate name from structured data
+    candidate_name = structured_data.get('name')
     
     if not job_id:
         logger.error(f"Missing job_id for candidate {candidate_id}, cannot process application")
@@ -240,7 +249,7 @@ async def process_candidate_message(data):
         logger.info(f"Similarity score between job {job_id} and candidate {candidate_id}: {similarity_score}")
         
         # Store similarity score in Redis
-        success = store_similarity_score(job_id, candidate_id, application_id, similarity_score)
+        success = store_similarity_score(job_id, candidate_id, application_id, similarity_score, candidate_name)
         
         if success:
             logger.info(f"Successfully stored similarity score for candidate {candidate_id} and job {job_id}")

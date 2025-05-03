@@ -77,15 +77,19 @@ async def get_top_candidates(
                     match_details = redis_client.hgetall(match_key)
                     if match_details:
                         match_data["details"] = match_details
+                        # Use candidate_name from Redis if available
+                        if "candidate_name" in match_details:
+                            match_data["candidate_name"] = match_details["candidate_name"]
                         
-                    # Get candidate details from Milvus if available
-                    candidate_res = milvus_client.get(
-                        collection_name="candidates",
-                        ids=[candidate_id],
-                        output_fields=["name", "candidate_id"]
-                    )
-                    if candidate_res and candidate_id in candidate_res:
-                        match_data["candidate_name"] = candidate_res[candidate_id].get("name", "Unknown")
+                    # If candidate_name not in Redis, try to get it from Milvus as fallback
+                    if "candidate_name" not in match_data:
+                        candidate_res = milvus_client.get(
+                            collection_name="candidates",
+                            ids=[candidate_id],
+                            output_fields=["name", "candidate_id"]
+                        )
+                        if candidate_res and candidate_id in candidate_res:
+                            match_data["candidate_name"] = candidate_res[candidate_id].get("name", "Unknown")
                 except Exception as e:
                     pass  # Continue even if details retrieval fails
             
