@@ -102,7 +102,7 @@ python master.py
 
 This will:
 1. Start the Embeddings API
-2. Start the Unified API
+2. API for candidate-job matching and job recommendations
 3. Start all three Kafka consumers in the correct order
 4. Monitor all services and handle graceful shutdown with Ctrl+C
 
