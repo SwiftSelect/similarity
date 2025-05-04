@@ -180,8 +180,8 @@ async def find_matching_jobs(candidate_vector, limit=10):
 
 async def process_candidate_recommendation(data):
     """Process a candidate message to generate job recommendations"""
-    candidate_id = data.get('candidateId', 'unknown')
-    structured_data = data.get('structured_data', {})
+    candidate_id = data.get('candidateId')
+    structured_data = data.get('structuredData')
     
     if candidate_id == 'unknown':
         logger.error("Missing candidateId, cannot process recommendation")
