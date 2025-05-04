@@ -1,3 +1,9 @@
+"""
+DEPRECATED: This API file is no longer the primary API endpoint.
+It has been combined with the jobs_recommendation API into a single unified API.
+Please use the main.py file at the root level of the project instead.
+"""
+
 # app/api.py
 import os
 import sys

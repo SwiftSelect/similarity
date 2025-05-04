@@ -1,12 +1,3 @@
-"""
-DEPRECATED: This file contains a single consumer for both job and candidate topics.
-The functionality has been split into two separate files:
-- job_consumer.py: Handles the jobs_topic
-- candidate_consumer.py: Handles the processed_resume_topic
-
-Please use those files instead of this one.
-"""
-
 from confluent_kafka import Consumer, Producer
 import json
 import httpx
@@ -23,6 +14,11 @@ from pymilvus import MilvusClient
 
 load_dotenv()
 
+KAFKA_BOOTSTRAP_SERVERS = os.getenv('bootstrap.servers')
+KAFKA_USERNAME = os.getenv('sasl.username')
+KAFKA_PASSWORD = os.getenv('sasl.password')
+CLIENT_ID2 = os.getenv('client.id2')
+
 client = MilvusClient(
     uri=os.getenv("ZILLIZ_URI"),
     token=os.getenv("ZILLIZ_TOKEN")
@@ -30,10 +26,10 @@ client = MilvusClient(
 
 # Redis configuration
 redis_client = redis.Redis(
-    host=os.getenv('REDIS_HOST', 'localhost'),
-    port=int(os.getenv('REDIS_PORT', 6379)),
-    db=int(os.getenv('REDIS_DB', 0)),
-    password=os.getenv('REDIS_PASSWORD', None),
+    host=os.getenv('REDIS_HOST'),
+    port=int(os.getenv('REDIS_PORT')),
+    db=int(os.getenv('REDIS_DB')),
+    password=os.getenv('REDIS_PASSWORD'),
     decode_responses=True  # Automatically decode responses to strings
 )
 
@@ -43,21 +39,20 @@ logger = logging.getLogger(__name__)
 
 # Kafka consumer configuration
 consumer_conf = {
-    'bootstrap.servers': 'localhost:9092',
-    'group.id': 'generic_embeddings_consumer_group',
+    'bootstrap.servers': KAFKA_BOOTSTRAP_SERVERS,
+    'security.protocol': 'SASL_SSL',
+    'sasl.mechanisms': 'PLAIN',
+    'sasl.username': KAFKA_USERNAME,
+    'sasl.password': KAFKA_PASSWORD,
+    'client.id': CLIENT_ID2,
+    'group.id': 'candidate_matching_group',
     'auto.offset.reset': 'earliest'
 }
 consumer = Consumer(consumer_conf)
-consumer.subscribe(['processed_resume_topic', 'jobs_topic'])
-
-# Kafka producer configuration (if needed)
-producer_conf = {
-    'bootstrap.servers': 'localhost:9092'
-}
-producer = Producer(producer_conf)
+consumer.subscribe(['application_resume_topic'])
 
 # Embeddings API URL
-EMBEDDINGS_API_URL = 'http://localhost:8001/embedding'
+EMBEDDINGS_API_URL = 'http://localhost:8003/embedding'
 
 def init_redis():
     """Check Redis connection and clear any previous data if needed"""
@@ -65,11 +60,6 @@ def init_redis():
         # Test the connection
         redis_client.ping()
         logger.info("Successfully connected to Redis")
-        
-        # Optionally, you can clear previous data:
-        # redis_client.flushdb()
-        # logger.info("Redis database flushed")
-        
         return True
     except redis.ConnectionError as e:
         logger.error(f"Could not connect to Redis: {str(e)}")
@@ -151,34 +141,6 @@ async def extract_candidate_text(structured_data):
 
     return ' '.join(text_parts).strip()
 
-async def extract_job_text(job_data):
-    """Extract relevant text from job data for embedding"""
-    text_parts = []
-    
-    # Add job title
-    if job_data.get('title'):
-        text_parts.append(job_data['title'])
-
-    # Add job description
-    if job_data.get('description'):
-        text_parts.append(job_data['description'])
-    
-    # Add job requirements
-    if job_data.get('overview'):
-        text_parts.append(job_data['overview'])
-    
-    # Add skills required
-    if job_data.get('skills'):
-        if isinstance(job_data['skills'], list):
-            text_parts.append(' '.join(job_data['skills']))
-        elif isinstance(job_data['skills'], str):
-            text_parts.append(job_data['skills'])
-    
-    if job_data.get('experience'):
-        text_parts.append(job_data['experience'])
-    
-    return ' '.join(text_parts).strip()
-
 async def generate_embedding(text, identifier):
     """Generate embedding for the given text"""
     payload = {
@@ -198,7 +160,7 @@ async def generate_embedding(text, identifier):
 async def process_candidate_message(data):
     """Process a candidate message and calculate similarity with the job they're applying to"""
     candidate_id = data.get('candidateID')
-    structured_data = data.get('structured_data')
+    structured_data = data.get('structuredData')
     job_id = data.get('job_id')  # Job ID is always expected
     application_id = data.get('application_id', f"app_{candidate_id}_{job_id}")  # Generate an application ID if not provided
     
@@ -270,72 +232,19 @@ async def process_candidate_message(data):
     
     return embedding
 
-async def process_job_message(data):
-    """Process a job message"""
-    job_id = data.get('job_id')
-    if not job_id:
-            logger.error(f"Missing job ID in data: {data}")
-            return False
-
-    logger.info(f"Processing job: {job_id}")
-
-    
-    # Extract text for embedding
-    text_to_embed = await extract_job_text(data)
-    
-    # Fallback to JSON if no text found
-    if not text_to_embed:
-        logger.warning(f"No relevant text found for job {job_id}, using JSON fallback")
-        text_to_embed = json.dumps(data)
-    
-    if not text_to_embed.strip():
-        logger.error(f"Empty text for job {job_id}, skipping")
-        return
-    
-    # Generate embedding
-    embedding = await generate_embedding(text_to_embed, f"job:{job_id}")
-    
-    # Prepare data for Milvus
-    data_to_insert = {
-        'job_id': job_id,
-        'job_vector': embedding
-    }
-    
-    # Insert into jobs collection
-    res = client.insert(
-        collection_name="jobs",
-        data=data_to_insert
-    )
-    logger.info(f"Job data inserted into Milvus: {res}")
-    
-    return embedding
-
 async def process_message(message):
     try:
         # Parse the Kafka message
         data = json.loads(message.value().decode('utf-8'))
-        topic = message.topic()
-        
-        logger.info(f"Received message from topic {topic}: {json.dumps(data, indent=2)[:200]}...")  # Truncate for brevity
-        
-        # Determine message type and process accordingly
-        if topic == 'processed_resume_topic' or 'candidateID' in data:
-            # This is a candidate application message
-            # (assumes all candidate messages include a job_id)
-            await process_candidate_message(data)
-        elif topic == 'jobs_topic' or ('job_id' in data and 'candidateID' not in data):
-            # This is a job posting message
-            await process_job_message(data)
-        else:
-            logger.warning(f"Unknown message type in topic {topic}: {json.dumps(data, indent=2)[:200]}...")
-            
+        logger.info(f"Received candidate message: {json.dumps(data, indent=2)[:200]}...")  # Truncate for brevity
+        await process_candidate_message(data)
     except httpx.HTTPStatusError as e:
         logger.error(f"Embeddings API error: {e.response.status_code} - {e.response.text}")
     except Exception as e:
         logger.error(f"Error processing message: {str(e)}\n{traceback.format_exc()}")
 
 async def main():
-    logger.info("Starting generic Kafka consumer for embeddings...")
+    logger.info("Starting candidate Kafka consumer for embeddings...")
     while True:
         msg = consumer.poll(1.0)
         if msg is None:
@@ -346,9 +255,9 @@ async def main():
         await process_message(msg)
 
 if __name__ == "__main__":
-    # Initialize Redis instead of PostgreSQL
+    # Initialize Redis
     if init_redis():
         asyncio.run(main())
     else:
         logger.error("Failed to initialize Redis. Exiting.")
-        sys.exit(1)
+        sys.exit(1) 

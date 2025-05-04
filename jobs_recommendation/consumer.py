@@ -11,7 +11,13 @@ import redis
 from dotenv import load_dotenv
 from pymilvus import MilvusClient
 
+
 load_dotenv()
+
+KAFKA_BOOTSTRAP_SERVERS = os.getenv('bootstrap.servers')
+KAFKA_USERNAME = os.getenv('sasl.username')
+KAFKA_PASSWORD = os.getenv('sasl.password')
+CLIENT_ID2 = os.getenv('client.id2')
 
 # Milvus Client
 client = MilvusClient(
@@ -21,10 +27,10 @@ client = MilvusClient(
 
 # Redis configuration
 redis_client = redis.Redis(
-    host=os.getenv('REDIS_HOST', 'localhost'),
-    port=int(os.getenv('REDIS_PORT', 6379)),
-    db=int(os.getenv('REDIS_DB', 0)),
-    password=os.getenv('REDIS_PASSWORD', None),
+    host=os.getenv('REDIS_HOST'),
+    port=int(os.getenv('REDIS_PORT')),
+    db=int(os.getenv('REDIS_DB')),
+    password=os.getenv('REDIS_PASSWORD'),
     decode_responses=True
 )
 
@@ -34,15 +40,20 @@ logger = logging.getLogger(__name__)
 
 # Kafka consumer configuration
 consumer_conf = {
-    'bootstrap.servers': 'localhost:9092',
-    'group.id': 'job_recommendations_consumer_group',
+    'bootstrap.servers': KAFKA_BOOTSTRAP_SERVERS,
+    'security.protocol': 'SASL_SSL',
+    'sasl.mechanisms': 'PLAIN',
+    'sasl.username': KAFKA_USERNAME,
+    'sasl.password': KAFKA_PASSWORD,
+    'client.id': CLIENT_ID2,
+    'group.id': 'job_recommendation_group',
     'auto.offset.reset': 'earliest'
 }
 consumer = Consumer(consumer_conf)
 consumer.subscribe(['candidate_data_topic'])
 
 # Embeddings API URL
-EMBEDDINGS_API_URL = 'http://localhost:8001/embedding'
+EMBEDDINGS_API_URL = 'http://localhost:8003/embedding'
 
 # Number of top matching jobs to find
 TOP_MATCHES_LIMIT = 10
@@ -162,11 +173,11 @@ async def find_matching_jobs(candidate_vector, limit=10):
 
 async def process_candidate_recommendation(data):
     """Process a candidate message to generate job recommendations"""
-    candidate_id = data.get('candidateID', 'unknown')
+    candidate_id = data.get('candidateId', 'unknown')
     structured_data = data.get('structured_data', {})
     
     if candidate_id == 'unknown':
-        logger.error("Missing candidateID, cannot process recommendation")
+        logger.error("Missing candidateId, cannot process recommendation")
         return
     
     logger.info(f"Processing recommendation for candidate: {candidate_id}")
