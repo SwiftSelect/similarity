@@ -104,16 +104,23 @@ async def extract_candidate_text(structured_data):
 
     # Add experience responsibilities
     for exp in structured_data.get('experience', []):
+        if exp.get('title'):
+            text_parts.append(exp['title'])
         text_parts.extend(exp.get('responsibilities', []))
 
     # Add project descriptions
     for project in structured_data.get('projects', []):
         if project.get('description'):
             text_parts.append(project['description'])
+        # Add technologies if present
+        technologies = project.get('technologies', [])
+        if technologies:
+            # Join technologies into a string
+            text_parts.append(' '.join(technologies))
 
     # Add technical skills
     technical_skills = structured_data.get('technical_skills', {})
-    for skill_category in ['programming_databases', 'frameworks', 'ml_genai', 'devops_tools']:
+    for skill_category in ['languages', 'tools']:
         skills = technical_skills.get(skill_category, [])
         if skills:
             text_parts.append(' '.join(skills))
