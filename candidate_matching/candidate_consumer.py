@@ -86,10 +86,8 @@ def calculate_similarity(vector1, vector2):
     return float(similarity)
 
 def store_similarity_score(job_id, candidate_id, application_id, similarity_score, candidate_name=None):
-    """Store similarity score in Redis"""
+    """Store similarity score and candidate info in Redis sorted set"""
     try:
-        # Store detailed information as a hash
-        match_key = f"match:{job_id}:{candidate_id}"
         redis_data = {
             'job_id': job_id,
             'candidate_id': candidate_id,
@@ -97,22 +95,14 @@ def store_similarity_score(job_id, candidate_id, application_id, similarity_scor
             'similarity_score': similarity_score,
             'timestamp': datetime.datetime.now().isoformat()
         }
-        
-        # Add candidate name if provided
         if candidate_name:
             redis_data['candidate_name'] = candidate_name
-            
-        redis_client.hset(match_key, mapping=redis_data)
-        
-        # Add to a sorted set for this job (for ranking)
-        # This allows retrieving candidates for a job sorted by score
+
+        # Store all candidate info as JSON string in the sorted set
         job_candidates_key = f"job:{job_id}:candidates"
-        redis_client.zadd(job_candidates_key, {candidate_id: similarity_score})
-        
-        # Also add to a sorted set for this candidate (to find best matching jobs)
-        candidate_jobs_key = f"candidate:{candidate_id}:jobs"
-        redis_client.zadd(candidate_jobs_key, {job_id: similarity_score})
-        
+        candidate_info_json = json.dumps(redis_data)
+        redis_client.zadd(job_candidates_key, {candidate_info_json: similarity_score})
+
         logger.info(f"Stored similarity score {similarity_score} for job {job_id} and candidate {candidate_id}")
         return True
     except Exception as e:
@@ -159,10 +149,10 @@ async def generate_embedding(text, identifier):
 
 async def process_candidate_message(data):
     """Process a candidate message and calculate similarity with the job they're applying to"""
-    candidate_id = data.get('candidateID')
+    candidate_id = data.get('candidateId')
     structured_data = data.get('structuredData')
     job_id = data.get('jobId')  # Job ID is always expected
-    application_id = data.get('application_id', f"app_{candidate_id}_{job_id}")  # Generate an application ID if not provided
+    application_id = data.get('applicationId')  # Generate an application ID if not provided
     
     # Extract candidate name from structured data
     candidate_name = structured_data.get('name')
@@ -208,12 +198,11 @@ async def process_candidate_message(data):
             ids=[job_id],
             output_fields=["job_vector"]
         )
-        
-        if not job_results or not job_results.get(job_id):
+        if not job_results or not isinstance(job_results, list) or not job_results[0].get("job_vector"):
             logger.error(f"Job vector not found for job_id: {job_id}")
             return embedding
         
-        job_vector = job_results[job_id]["job_vector"]
+        job_vector = job_results[0]["job_vector"]
         
         # Calculate similarity
         similarity_score = calculate_similarity(embedding, job_vector)
