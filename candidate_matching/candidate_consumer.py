@@ -161,7 +161,7 @@ async def process_candidate_message(data):
     """Process a candidate message and calculate similarity with the job they're applying to"""
     candidate_id = data.get('candidateID')
     structured_data = data.get('structuredData')
-    job_id = data.get('job_id')  # Job ID is always expected
+    job_id = data.get('jobId')  # Job ID is always expected
     application_id = data.get('application_id', f"app_{candidate_id}_{job_id}")  # Generate an application ID if not provided
     
     # Extract candidate name from structured data
