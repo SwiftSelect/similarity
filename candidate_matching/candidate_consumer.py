@@ -46,7 +46,8 @@ consumer_conf = {
     'sasl.password': KAFKA_PASSWORD,
     'client.id': CLIENT_ID2,
     'group.id': 'candidate_matching_group',
-    'auto.offset.reset': 'earliest'
+    'auto.offset.reset': 'earliest',
+    'enable.auto.commit': False
 }
 consumer = Consumer(consumer_conf)
 consumer.subscribe(['application_resume_topic'])
@@ -114,25 +115,25 @@ async def extract_candidate_text(structured_data):
     text_parts = []
 
     # Add experience responsibilities
-    for exp in structured_data.get('experience', []):
+    for exp in structured_data.get('experience', []) or []:
         if exp.get('title'):
             text_parts.append(exp['title'])
-        text_parts.extend(exp.get('responsibilities', []))
+        text_parts.extend(exp.get('responsibilities', []) or [])
 
     # Add project descriptions
-    for project in structured_data.get('projects', []):
+    for project in structured_data.get('projects', []) or []:
         if project.get('description'):
             text_parts.append(project['description'])
         # Add technologies if present
-        technologies = project.get('technologies', [])
+        technologies = project.get('technologies', []) or []
         if technologies:
             # Join technologies into a string
             text_parts.append(' '.join(technologies))
 
     # Add technical skills
-    technical_skills = structured_data.get('technical_skills', {})
+    technical_skills = structured_data.get('technical_skills', {}) or {}
     for skill_category in ['languages', 'tools']:
-        skills = technical_skills.get(skill_category, [])
+        skills = technical_skills.get(skill_category, []) or []
         if skills:
             text_parts.append(' '.join(skills))
 
@@ -232,7 +233,8 @@ async def process_message(message):
     try:
         # Parse the Kafka message
         data = json.loads(message.value().decode('utf-8'))
-        logger.info(f"Received candidate message: {json.dumps(data, indent=2)[:200]}...")  # Truncate for brevity
+        topic = message.topic()
+        logger.info(f"Received candidate message from topic {topic}: {json.dumps(data, indent=2)}")
         await process_candidate_message(data)
     except httpx.HTTPStatusError as e:
         logger.error(f"Embeddings API error: {e.response.status_code} - {e.response.text}")
@@ -242,13 +244,17 @@ async def process_message(message):
 async def main():
     logger.info("Starting candidate Kafka consumer for embeddings...")
     while True:
-        msg = consumer.poll(1.0)
+        msg = await asyncio.to_thread(consumer.poll, 1.0)
         if msg is None:
             continue
         if msg.error():
             logger.error(f"Consumer error: {msg.error()}")
             continue
-        await process_message(msg)
+        try :
+            await process_message(msg)
+            await asyncio.to_thread(consumer.commit, message=msg)
+        except Exception as e:
+            logger.error(f"Error committing message: {str(e)}\n{traceback.format_exc()}")
 
 if __name__ == "__main__":
     # Initialize Redis

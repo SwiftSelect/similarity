@@ -20,3 +20,7 @@ flake8>=6.0.0
 confluent-kafka
 httpx
 psycopg2-binary
+pytest==7.4.3
+pytest-asyncio==0.21.1
+httpx==0.25.1
+pytest-cov==4.1.0
